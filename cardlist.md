@@ -6,4 +6,6 @@ aside: false
 import CardGrid from './components/CardGrid.vue'
 </script>
 
-<CardGrid />
+<ClientOnly>
+  <CardGrid />
+</ClientOnly>

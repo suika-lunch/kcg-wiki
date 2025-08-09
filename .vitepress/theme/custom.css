@@ -1,7 +1,0 @@
-/* .vitepress/theme/custom.css */
-.VPDoc:not(.has-sidebar) .container {
-  max-width: 9999px !important;
-}
-.VPDoc:not(.has-sidebar) .content {
-  max-width: 9999px !important;
-}
