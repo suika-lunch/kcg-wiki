@@ -18,7 +18,7 @@ const cardIds = ref<string[]>([]);
 onMounted(async () => {
   try {
     // VitePressのpublicディレクトリからの相対パスでCSVファイルをフェッチ
-    const response = await fetch("./cards.csv");
+    const response = await fetch("cards.csv");
     const csvText = await response.text();
 
     // CSVをパース
@@ -48,7 +48,7 @@ onMounted(async () => {
 });
 
 const getImagePath = (cardId: string) => {
-  return `./images/cards/${cardId}.avif`;
+  return `cards/${cardId}.avif`;
 };
 </script>
 
