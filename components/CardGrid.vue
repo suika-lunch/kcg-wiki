@@ -1,67 +1,102 @@
 <template>
   <div class="card-grid">
-    <div v-for="cardId in cardIds" :key="cardId" class="card-item">
+    <div
+      v-for="card in cards"
+      :key="card.id"
+      class="card-item"
+      @click="openModal(card)"
+    >
       <img
-        :src="getImagePath(cardId)"
-        :alt="`Card ${cardId}`"
+        :src="getImagePath(card.id)"
+        :alt="`Card ${card.id}`"
         class="card-image"
         loading="lazy"
         decoding="async"
       />
     </div>
   </div>
+
+  <CardModal :show="showModal" :card="selectedCard" @close="closeModal" />
+
+  <div v-if="errorMessage" class="error-message">
+    {{ errorMessage }}
+  </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
-import { withBase } from 'vitepress';
+import { withBase } from "vitepress";
+import CardModal from "./CardModal.vue";
 
-const cardIds = ref<string[]>([]);
+interface Card {
+  id: string;
+  name: string;
+  kind: string;
+  type: string;
+  effect: string;
+  tags: string;
+}
 
-onMounted(async () => {
+const cards = ref<Card[]>([]);
+const showModal = ref(false);
+const selectedCard = ref<Card | null>(null);
+const errorMessage = ref<string | null>(null); // エラーメッセージ用のリアクティブ変数
+
+const parseCsv = async () => {
   try {
-    // VitePressのpublicディレクトリからの相対パスでCSVファイルをフェッチ
     const response = await fetch("cards.csv");
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
     let csvText = await response.text();
-    csvText = csvText.replace(/\uFEFF/g, ''); // BOM文字を削除
+    csvText = csvText.replace(/\uFEFF/g, "");
 
-    // CSVをパース
-    const lines = csvText.replace(/\r?\n/g, '\n').trim().split('\n'); // 改行コードを正規化し、トリム
-    const headers = lines[0].split(',').map(header => header.trim()); // ヘッダーをトリム
-    const idIndex = headers.indexOf("id");
+    const lines = csvText.replace(/\r?\n/g, "\n").trim().split("\n");
+    const headers = lines[0].split(",").map((header) => header.trim());
 
-    if (idIndex === -1) {
-      console.error('CSVファイルに"id"列が見つかりません。');
-      return;
-    }
-
-    const parsedCardIds: string[] = [];
+    const parsedCards: Card[] = [];
     for (let i = 1; i < lines.length; i++) {
       const line = lines[i];
-      if (!line.trim()) continue; // 空行をスキップ
-      const values = line.split(',').map(value => value.trim()); // 値をトリム
-      if (values[idIndex]) {
-        parsedCardIds.push(values[idIndex]);
-      }
+      if (!line.trim()) continue;
+      const values = line.split(",").map((value) => value.trim());
+
+      const card: Partial<Card> = {};
+      headers.forEach((header, index) => {
+        (card as any)[header] = values[index];
+      });
+      parsedCards.push(card as Card);
     }
-    cardIds.value = parsedCardIds;
+    cards.value = parsedCards;
   } catch (error) {
     console.error(
       "CSVファイルの読み込みまたはパース中にエラーが発生しました:",
       error,
     );
+    errorMessage.value = "カードデータの読み込み中にエラーが発生しました。"; // ユーザー向けメッセージ
   }
+};
+
+onMounted(() => {
+  parseCsv();
 });
 
 const getImagePath = (cardId: string) => {
   return withBase(`cards/${cardId}.avif`);
 };
+
+const openModal = (card: Card) => {
+  selectedCard.value = card;
+  showModal.value = true;
+};
+
+const closeModal = () => {
+  showModal.value = false;
+  selectedCard.value = null;
+};
 </script>
 
 <style scoped>
+/* 既存のスタイル */
 .card-grid {
   display: grid;
   /* full-bleed: コンテンツ幅をブレークアウトしてビューポート全幅に */
@@ -86,6 +121,7 @@ const getImagePath = (cardId: string) => {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
   transition: transform 150ms ease-out;
   will-change: transform;
+  cursor: pointer; /* クリック可能であることを示す */
 }
 
 .card-item:hover {
@@ -98,6 +134,13 @@ const getImagePath = (cardId: string) => {
   display: block;
   object-fit: contain; /* 画像のアスペクト比を維持し、コンテナに収める */
   aspect-ratio: 63 / 88;
+}
+
+.error-message {
+  color: red;
+  text-align: center;
+  margin-top: 20px;
+  font-weight: bold;
 }
 
 /* レスポンシブ対応 */
