@@ -4,7 +4,7 @@ layout: home
 
 hero:
   name: "神椿TCG非公式Wiki"
-  text: "by 紙椿"
+  text: "（工事中）"
   tagline: KAMITSUBAKI CARD GAMEの情報をまとめたサイトです
   actions:
     - theme: brand

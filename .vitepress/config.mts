@@ -6,6 +6,17 @@ export default defineConfig({
   base: "/kcg-wiki/",
   title: "神椿TCG非公式Wiki",
   description: "KCG Unofficial Wiki",
+  head: [
+    [
+      "link",
+      {
+        rel: "icon",
+        type: "image/png",
+        sizes: "1600x1600",
+        href: "/kcg-wiki/paper_camellia.png",
+      },
+    ],
+  ],
   themeConfig: {
     // https://vitepress.dev/reference/default-theme-config
     nav: [

@@ -1,67 +1,130 @@
 <template>
   <div class="card-grid">
-    <div v-for="cardId in cardIds" :key="cardId" class="card-item">
+    <div
+      v-for="card in cards"
+      :key="card.id"
+      class="card-item"
+      role="button"
+      tabindex="0"
+      aria-haspopup="dialog"
+      :aria-label="card.name ?? card.id"
+      aria-controls="card-modal"
+      @click="openModal(card)"
+      @keydown.enter.prevent="openModal(card)"
+      @keydown.space.prevent
+      @keyup.space="openModal(card)"
+    >
       <img
-        :src="getImagePath(cardId)"
-        :alt="`Card ${cardId}`"
+        :src="getImagePath(card.id)"
+        :alt="card.name ?? card.id"
         class="card-image"
         loading="lazy"
         decoding="async"
+        draggable="false"
+        @error="onImageError"
       />
     </div>
+  </div>
+
+  <CardModal
+    id="card-modal"
+    v-if="showModal && selectedCard"
+    :show="showModal"
+    :card="selectedCard!"
+    @close="closeModal"
+  />
+
+  <div
+    v-if="errorMessage"
+    class="error-message"
+    role="alert"
+    aria-atomic="true"
+  >
+    {{ errorMessage }}
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
-import { withBase } from 'vitepress';
+import { ref, onMounted, onBeforeUnmount, nextTick } from "vue";
+import CardModal from "./CardModal.vue";
+import { Card } from "../types/card"; // Cardインターフェースをインポート
+import { parseCsvData } from "../utils/csvParser"; // parseCsvData関数をインポート
+import { withBase } from "vitepress";
+import { getImagePath, getPlaceholderImagePath } from "../utils/imagePath"; // getPlaceholderImagePath をインポート
 
-const cardIds = ref<string[]>([]);
+const cards = ref<Card[]>([]);
+const showModal = ref(false);
+const selectedCard = ref<Card | null>(null);
+const errorMessage = ref<string | null>(null); // エラーメッセージ用のリアクティブ変数
+const abortController = new AbortController();
+const lastFocusedEl = ref<HTMLElement | null>(null);
 
-onMounted(async () => {
+const fetchAndParseCsv = async () => {
   try {
-    // VitePressのpublicディレクトリからの相対パスでCSVファイルをフェッチ
-    const response = await fetch("cards.csv");
+    // 直前のエラーをクリア
+    errorMessage.value = null;
+    const response = await fetch(withBase("cards.csv"), {
+      signal: abortController.signal,
+    });
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      // HTTPエラーの場合、早期リターン
+      errorMessage.value = `カードデータの読み込みに失敗しました: HTTPステータス ${response.status}`;
+      return;
     }
-    let csvText = await response.text();
-    csvText = csvText.replace(/\uFEFF/g, ''); // BOM文字を削除
+    const csvText = await response.text();
 
-    // CSVをパース
-    const lines = csvText.replace(/\r?\n/g, '\n').trim().split('\n'); // 改行コードを正規化し、トリム
-    const headers = lines[0].split(',').map(header => header.trim()); // ヘッダーをトリム
-    const idIndex = headers.indexOf("id");
+    const parseResult = parseCsvData(csvText);
 
-    if (idIndex === -1) {
-      console.error('CSVファイルに"id"列が見つかりません。');
+    if (parseResult.isErr()) {
+      // パースエラーの場合、早期リターン
+      errorMessage.value = `カードデータのパース中にエラーが発生しました: ${parseResult.error.message}`;
       return;
     }
 
-    const parsedCardIds: string[] = [];
-    for (let i = 1; i < lines.length; i++) {
-      const line = lines[i];
-      if (!line.trim()) continue; // 空行をスキップ
-      const values = line.split(',').map(value => value.trim()); // 値をトリム
-      if (values[idIndex]) {
-        parsedCardIds.push(values[idIndex]);
-      }
-    }
-    cardIds.value = parsedCardIds;
+    cards.value = parseResult.value;
   } catch (error) {
-    console.error(
-      "CSVファイルの読み込みまたはパース中にエラーが発生しました:",
-      error,
-    );
+    // アンマウント中に中断した場合は何もしない
+    if (error instanceof DOMException && error.name === "AbortError") {
+      return;
+    }
+    // 予期せぬネットワークエラーなど
+    errorMessage.value = `カードデータの取得中に予期せぬエラーが発生しました: ${
+      error instanceof Error ? error.message : String(error)
+    }`;
   }
-});
+};
 
-const getImagePath = (cardId: string) => {
-  return withBase(`cards/${cardId}.avif`);
+onMounted(fetchAndParseCsv);
+onBeforeUnmount(() => abortController.abort());
+
+const onImageError = (event: Event) => {
+  const target = event.target as HTMLImageElement;
+  target.src = getPlaceholderImagePath();
+  target.onerror = null; // 無限ループを防ぐため、これ以上エラーを発生させない
+};
+
+const openModal = (card: Card) => {
+  // トリガー要素を保存しておき、クローズ時にフォーカスを戻す
+  lastFocusedEl.value =
+    document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+  selectedCard.value = card;
+  showModal.value = true;
+};
+
+const closeModal = () => {
+  showModal.value = false;
+  selectedCard.value = null;
+  // 次のフレームで元の要素にフォーカスを戻す
+  nextTick(() => {
+    lastFocusedEl.value?.focus();
+  });
 };
 </script>
 
 <style scoped>
+/* 既存のスタイル */
 .card-grid {
   display: grid;
   /* full-bleed: コンテンツ幅をブレークアウトしてビューポート全幅に */
@@ -86,6 +149,12 @@ const getImagePath = (cardId: string) => {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
   transition: transform 150ms ease-out;
   will-change: transform;
+  cursor: pointer; /* クリック可能であることを示す */
+}
+
+.card-item:focus-visible {
+  outline: 3px solid var(--vp-c-brand-1);
+  outline-offset: 3px;
 }
 
 .card-item:hover {
@@ -98,6 +167,13 @@ const getImagePath = (cardId: string) => {
   display: block;
   object-fit: contain; /* 画像のアスペクト比を維持し、コンテナに収める */
   aspect-ratio: 63 / 88;
+}
+
+.error-message {
+  color: var(--vp-c-danger-1, #e45649);
+  text-align: center;
+  margin-top: 20px;
+  font-weight: bold;
 }
 
 /* レスポンシブ対応 */
