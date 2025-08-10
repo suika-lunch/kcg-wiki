@@ -51,12 +51,20 @@ export const parseCsvData = (csvText: string): Result<Card[], Error> => {
 
     // ヘッダーのパース
     const headers = parseCsvLine(lines[0]);
-    const required: (keyof Card)[] = ["id", "name", "kind", "type", "effect", "tags"];
-  const missing = required.filter((h) => !headers.includes(h));
-  if (missing.length) {
-    return err(new Error(`必須ヘッダーが不足しています: ${missing.join(", ")}`));
-  }
-
+    const required: (keyof Card)[] = [
+      "id",
+      "name",
+      "kind",
+      "type",
+      "effect",
+      "tags",
+    ];
+    const missing = required.filter((h) => !headers.includes(h));
+    if (missing.length) {
+      return err(
+        new Error(`必須ヘッダーが不足しています: ${missing.join(", ")}`),
+      );
+    }
 
     const parsedCards: Card[] = [];
     for (let i = 1; i < lines.length; i++) {
@@ -75,19 +83,19 @@ export const parseCsvData = (csvText: string): Result<Card[], Error> => {
         );
       }
 
-  const rec: Record<string, string> = {};
-  headers.forEach((header, index) => {
-    rec[header] = values[index] ?? "";
-  });
-  const card: Card = {
-    id: rec["id"] ?? "",
-    name: rec["name"] ?? "",
-    kind: rec["kind"] ?? "",
-    type: rec["type"] ?? "",
-    effect: rec["effect"] ?? "",
-    tags: rec["tags"] ?? "",
-  };
-  parsedCards.push(card);
+      const rec: Record<string, string> = {};
+      headers.forEach((header, index) => {
+        rec[header] = values[index] ?? "";
+      });
+      const card: Card = {
+        id: rec["id"] ?? "",
+        name: rec["name"] ?? "",
+        kind: rec["kind"] ?? "",
+        type: rec["type"] ?? "",
+        effect: rec["effect"] ?? "",
+        tags: rec["tags"] ?? "",
+      };
+      parsedCards.push(card);
     }
 
     return ok(parsedCards);

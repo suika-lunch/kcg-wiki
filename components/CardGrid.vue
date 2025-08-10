@@ -8,6 +8,7 @@
       tabindex="0"
       aria-haspopup="dialog"
       :aria-label="card.name ?? card.id"
+      aria-controls="card-modal"
       @click="openModal(card)"
       @keydown.enter.prevent="openModal(card)"
       @keydown.space.prevent
@@ -19,12 +20,14 @@
         class="card-image"
         loading="lazy"
         decoding="async"
+        draggable="false"
         @error="onImageError"
       />
     </div>
   </div>
 
   <CardModal
+    id="card-modal"
     v-if="showModal && selectedCard"
     :show="showModal"
     :card="selectedCard!"
@@ -35,7 +38,6 @@
     v-if="errorMessage"
     class="error-message"
     role="alert"
-    aria-live="polite"
     aria-atomic="true"
   >
     {{ errorMessage }}
@@ -103,7 +105,10 @@ const onImageError = (event: Event) => {
 
 const openModal = (card: Card) => {
   // トリガー要素を保存しておき、クローズ時にフォーカスを戻す
-  lastFocusedEl.value = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  lastFocusedEl.value =
+    document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
   selectedCard.value = card;
   showModal.value = true;
 };
