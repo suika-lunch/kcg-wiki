@@ -6,9 +6,12 @@
       class="card-item"
       role="button"
       tabindex="0"
+      aria-haspopup="dialog"
+      :aria-label="card.name ?? card.id"
       @click="openModal(card)"
       @keydown.enter.prevent="openModal(card)"
-      @keydown.space.prevent="openModal(card)"
+      @keydown.space.prevent
+      @keyup.space="openModal(card)"
     >
       <img
         :src="getImagePath(card.id)"
@@ -28,13 +31,19 @@
     @close="closeModal"
   />
 
-  <div v-if="errorMessage" class="error-message">
+  <div
+    v-if="errorMessage"
+    class="error-message"
+    role="alert"
+    aria-live="polite"
+    aria-atomic="true"
+  >
     {{ errorMessage }}
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
+import { ref, onMounted, onBeforeUnmount, nextTick } from "vue";
 import CardModal from "./CardModal.vue";
 import { Card } from "../types/card"; // Cardインターフェースをインポート
 import { parseCsvData } from "../utils/csvParser"; // parseCsvData関数をインポート
@@ -45,10 +54,16 @@ const cards = ref<Card[]>([]);
 const showModal = ref(false);
 const selectedCard = ref<Card | null>(null);
 const errorMessage = ref<string | null>(null); // エラーメッセージ用のリアクティブ変数
+const abortController = new AbortController();
+const lastFocusedEl = ref<HTMLElement | null>(null);
 
 const fetchAndParseCsv = async () => {
   try {
-    const response = await fetch(withBase("cards.csv"));
+    // 直前のエラーをクリア
+    errorMessage.value = null;
+    const response = await fetch(withBase("cards.csv"), {
+      signal: abortController.signal,
+    });
     if (!response.ok) {
       // HTTPエラーの場合、早期リターン
       errorMessage.value = `カードデータの読み込みに失敗しました: HTTPステータス ${response.status}`;
@@ -66,6 +81,10 @@ const fetchAndParseCsv = async () => {
 
     cards.value = parseResult.value;
   } catch (error) {
+    // アンマウント中に中断した場合は何もしない
+    if (error instanceof DOMException && error.name === "AbortError") {
+      return;
+    }
     // 予期せぬネットワークエラーなど
     errorMessage.value = `カードデータの取得中に予期せぬエラーが発生しました: ${
       error instanceof Error ? error.message : String(error)
@@ -73,9 +92,8 @@ const fetchAndParseCsv = async () => {
   }
 };
 
-onMounted(() => {
-  fetchAndParseCsv();
-});
+onMounted(fetchAndParseCsv);
+onBeforeUnmount(() => abortController.abort());
 
 const onImageError = (event: Event) => {
   const target = event.target as HTMLImageElement;
@@ -84,6 +102,8 @@ const onImageError = (event: Event) => {
 };
 
 const openModal = (card: Card) => {
+  // トリガー要素を保存しておき、クローズ時にフォーカスを戻す
+  lastFocusedEl.value = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   selectedCard.value = card;
   showModal.value = true;
 };
@@ -91,6 +111,10 @@ const openModal = (card: Card) => {
 const closeModal = () => {
   showModal.value = false;
   selectedCard.value = null;
+  // 次のフレームで元の要素にフォーカスを戻す
+  nextTick(() => {
+    lastFocusedEl.value?.focus();
+  });
 };
 </script>
 
@@ -121,6 +145,11 @@ const closeModal = () => {
   transition: transform 150ms ease-out;
   will-change: transform;
   cursor: pointer; /* クリック可能であることを示す */
+}
+
+.card-item:focus-visible {
+  outline: 3px solid var(--vp-c-brand-1);
+  outline-offset: 3px;
 }
 
 .card-item:hover {
