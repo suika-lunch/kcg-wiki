@@ -12,6 +12,7 @@
         class="card-image"
         loading="lazy"
         decoding="async"
+        @error="onImageError"
       />
     </div>
   </div>
@@ -25,63 +26,51 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
-import { withBase } from "vitepress";
 import CardModal from "./CardModal.vue";
-
-interface Card {
-  id: string;
-  name: string;
-  kind: string;
-  type: string;
-  effect: string;
-  tags: string;
-}
+import { Card } from "../types/card"; // Cardインターフェースをインポート
+import { parseCsvData } from "../utils/csvParser"; // parseCsvData関数をインポート
+import { getImagePath, getPlaceholderImagePath } from "../utils/imagePath"; // getPlaceholderImagePath をインポート
 
 const cards = ref<Card[]>([]);
 const showModal = ref(false);
 const selectedCard = ref<Card | null>(null);
 const errorMessage = ref<string | null>(null); // エラーメッセージ用のリアクティブ変数
 
-const parseCsv = async () => {
+const fetchAndParseCsv = async () => {
   try {
     const response = await fetch("cards.csv");
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      // HTTPエラーの場合、早期リターン
+      errorMessage.value = `カードデータの読み込みに失敗しました: HTTPステータス ${response.status}`;
+      return;
     }
-    let csvText = await response.text();
-    csvText = csvText.replace(/\uFEFF/g, "");
+    const csvText = await response.text();
 
-    const lines = csvText.replace(/\r?\n/g, "\n").trim().split("\n");
-    const headers = lines[0].split(",").map((header) => header.trim());
+    const parseResult = parseCsvData(csvText);
 
-    const parsedCards: Card[] = [];
-    for (let i = 1; i < lines.length; i++) {
-      const line = lines[i];
-      if (!line.trim()) continue;
-      const values = line.split(",").map((value) => value.trim());
-
-      const card: Partial<Card> = {};
-      headers.forEach((header, index) => {
-        (card as any)[header] = values[index];
-      });
-      parsedCards.push(card as Card);
+    if (parseResult.isErr()) {
+      // パースエラーの場合、早期リターン
+      errorMessage.value = `カードデータのパース中にエラーが発生しました: ${parseResult.error.message}`;
+      return;
     }
-    cards.value = parsedCards;
+
+    cards.value = parseResult.value;
   } catch (error) {
-    console.error(
-      "CSVファイルの読み込みまたはパース中にエラーが発生しました:",
-      error,
-    );
-    errorMessage.value = "カードデータの読み込み中にエラーが発生しました。"; // ユーザー向けメッセージ
+    // 予期せぬネットワークエラーなど
+    errorMessage.value = `カードデータの取得中に予期せぬエラーが発生しました: ${
+      error instanceof Error ? error.message : String(error)
+    }`;
   }
 };
 
 onMounted(() => {
-  parseCsv();
+  fetchAndParseCsv();
 });
 
-const getImagePath = (cardId: string) => {
-  return withBase(`cards/${cardId}.avif`);
+const onImageError = (event: Event) => {
+  const target = event.target as HTMLImageElement;
+  target.src = getPlaceholderImagePath();
+  target.onerror = null; // 無限ループを防ぐため、これ以上エラーを発生させない
 };
 
 const openModal = (card: Card) => {

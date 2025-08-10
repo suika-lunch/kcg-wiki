@@ -25,6 +25,7 @@
               :src="getImagePath(card.id)"
               :alt="`Card ${card.id}`"
               class="modal-card-image"
+              @error="onImageError"
             />
           </div>
           <div class="card-details">
@@ -41,16 +42,8 @@
 
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted, nextTick } from "vue";
-import { withBase } from "vitepress";
-
-interface Card {
-  id: string;
-  name: string;
-  kind: string;
-  type: string;
-  effect: string;
-  tags: string;
-}
+import { Card } from "../types/card"; // Cardインターフェースをインポート
+import { getImagePath, getPlaceholderImagePath } from "../utils/imagePath"; // getPlaceholderImagePath をインポート
 
 // イベントエミットの型定義を強化
 interface CardModalEmits {
@@ -66,11 +59,6 @@ const emit = defineEmits<CardModalEmits>(); // 型引数を使用
 
 const modalRef = ref<HTMLElement | null>(null);
 let previouslyFocusedElement: HTMLElement | null = null;
-
-const getImagePath = (cardId: string) => {
-  // cardIdがundefinedにならないため、型をstringに変更
-  return withBase(`cards/${cardId}.avif`);
-};
 
 watch(
   () => props.show,
@@ -91,6 +79,12 @@ watch(
     }
   },
 );
+
+const onImageError = (event: Event) => {
+  const target = event.target as HTMLImageElement;
+  target.src = getPlaceholderImagePath();
+  target.onerror = null; // 無限ループを防ぐため、これ以上エラーを発生させない
+};
 
 const handleKeydown = (event: KeyboardEvent) => {
   if (event.key === "Escape" && props.show) {
