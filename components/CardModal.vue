@@ -6,6 +6,8 @@
       @click.self="emit('close')"
       role="dialog"
       aria-modal="true"
+      :aria-labelledby="'modalTitle'"
+      tabindex="-1"
       ref="modalRef"
     >
       <div class="modal-container">
@@ -15,6 +17,7 @@
             class="modal-close-button"
             @click="emit('close')"
             aria-label="Close modal"
+            type="button"
           >
             ×
           </button>
@@ -23,7 +26,7 @@
           <div class="card-image-container">
             <img
               :src="getImagePath(card.id)"
-              :alt="`Card ${card.id}`"
+              :alt="card.name || card.id"
               class="modal-card-image"
               @error="onImageError"
             />

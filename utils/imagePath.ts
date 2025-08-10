@@ -13,7 +13,7 @@ import { withBase } from "vitepress";
  * @returns 画像ファイルの絶対パス
  */
 export const getImagePath = (cardId: string): string => {
-  return withBase(`cards/${cardId}.avif`);
+  return withBase(`/cards/${encodeURIComponent(cardId)}.avif`);
 };
 
 /**
@@ -21,5 +21,5 @@ export const getImagePath = (cardId: string): string => {
  * @returns プレースホルダ画像の絶対パス
  */
 export const getPlaceholderImagePath = (): string => {
-  return withBase(`placeholder.avif`);
+  return withBase(`/placeholder.avif`);
 };

@@ -8,6 +8,31 @@
 import { Result, ok, err } from "neverthrow";
 import { Card } from "../types/card";
 
+// 簡易CSV行パーサ: 二重引用符・エスケープ（二重二重引用符）とカンマ区切りに対応
+function parseCsvLine(line: string): string[] {
+  const out: string[] = [];
+  let cur = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        cur += '"'; // エスケープされた引用符
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (ch === "," && !inQuotes) {
+      out.push(cur.trim());
+      cur = "";
+    } else {
+      cur += ch;
+    }
+  }
+  out.push(cur.trim());
+  return out;
+}
+
 /**
  * CSV文字列をパースしてCardオブジェクトの配列に変換します。
  * @param csvText パースするCSV文字列
@@ -25,14 +50,20 @@ export const parseCsvData = (csvText: string): Result<Card[], Error> => {
     }
 
     // ヘッダーのパース
-    const headers = lines[0].split(",").map((header) => header.trim());
+    const headers = parseCsvLine(lines[0]);
+    const required: (keyof Card)[] = ["id", "name", "kind", "type", "effect", "tags"];
+  const missing = required.filter((h) => !headers.includes(h));
+  if (missing.length) {
+    return err(new Error(`必須ヘッダーが不足しています: ${missing.join(", ")}`));
+  }
+
 
     const parsedCards: Card[] = [];
     for (let i = 1; i < lines.length; i++) {
       const line = lines[i];
       if (!line.trim()) continue; // 空行はスキップ
 
-      const values = line.split(",").map((value) => value.trim());
+      const values = parseCsvLine(line);
 
       // ヘッダーと値の数が一致しない場合はエラー
       if (values.length !== headers.length) {
@@ -44,11 +75,19 @@ export const parseCsvData = (csvText: string): Result<Card[], Error> => {
         );
       }
 
-      const card: Partial<Card> = {};
-      headers.forEach((header, index) => {
-        (card as any)[header] = values[index];
-      });
-      parsedCards.push(card as Card);
+  const rec: Record<string, string> = {};
+  headers.forEach((header, index) => {
+    rec[header] = values[index] ?? "";
+  });
+  const card: Card = {
+    id: rec["id"] ?? "",
+    name: rec["name"] ?? "",
+    kind: rec["kind"] ?? "",
+    type: rec["type"] ?? "",
+    effect: rec["effect"] ?? "",
+    tags: rec["tags"] ?? "",
+  };
+  parsedCards.push(card);
     }
 
     return ok(parsedCards);

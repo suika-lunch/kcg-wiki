@@ -4,11 +4,15 @@
       v-for="card in cards"
       :key="card.id"
       class="card-item"
+      role="button"
+      tabindex="0"
       @click="openModal(card)"
+      @keydown.enter.prevent="openModal(card)"
+      @keydown.space.prevent="openModal(card)"
     >
       <img
         :src="getImagePath(card.id)"
-        :alt="`Card ${card.id}`"
+        :alt="card.name ?? card.id"
         class="card-image"
         loading="lazy"
         decoding="async"
@@ -17,7 +21,12 @@
     </div>
   </div>
 
-  <CardModal :show="showModal" :card="selectedCard" @close="closeModal" />
+  <CardModal
+    v-if="showModal && selectedCard"
+    :show="showModal"
+    :card="selectedCard!"
+    @close="closeModal"
+  />
 
   <div v-if="errorMessage" class="error-message">
     {{ errorMessage }}
@@ -29,6 +38,7 @@ import { ref, onMounted } from "vue";
 import CardModal from "./CardModal.vue";
 import { Card } from "../types/card"; // Cardインターフェースをインポート
 import { parseCsvData } from "../utils/csvParser"; // parseCsvData関数をインポート
+import { withBase } from "vitepress";
 import { getImagePath, getPlaceholderImagePath } from "../utils/imagePath"; // getPlaceholderImagePath をインポート
 
 const cards = ref<Card[]>([]);
@@ -38,7 +48,7 @@ const errorMessage = ref<string | null>(null); // エラーメッセージ用の
 
 const fetchAndParseCsv = async () => {
   try {
-    const response = await fetch("cards.csv");
+    const response = await fetch(withBase("cards.csv"));
     if (!response.ok) {
       // HTTPエラーの場合、早期リターン
       errorMessage.value = `カードデータの読み込みに失敗しました: HTTPステータス ${response.status}`;
@@ -126,7 +136,7 @@ const closeModal = () => {
 }
 
 .error-message {
-  color: red;
+  color: var(--vp-c-danger-1, #e45649);
   text-align: center;
   margin-top: 20px;
   font-weight: bold;
