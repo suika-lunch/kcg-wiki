@@ -9,9 +9,9 @@
   },
   "devDependencies": {
     "neverthrow": "^8.2.0",
-    "oxlint": "^1.11.1",
+    "oxlint": "^1.11.2",
     "prettier": "4.0.0-alpha.12",
-    "vite": "npm:rolldown-vite@^7.1.0",
+    "vite": "npm:rolldown-vite@^7.1.1",
     "vitepress": "2.0.0-alpha.9",
     "vitest": "4.0.0-beta.7"
   },
