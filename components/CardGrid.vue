@@ -1,3 +1,9 @@
+/** * @file CardGrid.vue * @brief
+カードのグリッド表示とモーダル表示を管理するVueコンポーネント。 * *
+cards.csvからカードデータを読み込み、グリッド形式で表示します。 *
+各カードをクリックすると詳細モーダルが表示されます。 *
+データ取得とエラーハンドリングにはneverthrowを使用し、非同期処理の安全性を高めます。
+*/
 <template>
   <div class="card-grid">
     <div
@@ -47,64 +53,89 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, nextTick } from "vue";
 import CardModal from "./CardModal.vue";
-import { Card } from "../types/card"; // Cardインターフェースをインポート
-import { parseCsvData } from "../utils/csvParser"; // parseCsvData関数をインポート
+import { Card } from "../types/card";
+import { parseCsvData } from "../utils/csvParser";
 import { withBase } from "vitepress";
-import { getImagePath, getPlaceholderImagePath } from "../utils/imagePath"; // getPlaceholderImagePath をインポート
+import { getImagePath, getPlaceholderImagePath } from "../utils/imagePath";
+import { fromAsyncThrowable, Result, err } from "neverthrow"; // neverthrowをインポート
 
 const cards = ref<Card[]>([]);
 const showModal = ref(false);
 const selectedCard = ref<Card | null>(null);
-const errorMessage = ref<string | null>(null); // エラーメッセージ用のリアクティブ変数
+const errorMessage = ref<string | null>(null);
 const abortController = new AbortController();
 const lastFocusedEl = ref<HTMLElement | null>(null);
 
-const fetchAndParseCsv = async () => {
-  try {
-    // 直前のエラーをクリア
-    errorMessage.value = null;
-    const response = await fetch(withBase("cards.csv"), {
-      signal: abortController.signal,
-    });
-    if (!response.ok) {
-      // HTTPエラーの場合、早期リターン
-      errorMessage.value = `カードデータの読み込みに失敗しました: HTTPステータス ${response.status}`;
-      return;
-    }
-    const csvText = await response.text();
+// データ取得とパースのロジックを分離した関数
+const loadCardsData = async (
+  signal: AbortSignal,
+): Promise<Result<Card[], Error>> => {
+  const responseResult = await fromAsyncThrowable(
+    () => fetch(withBase("cards.csv"), { signal }),
+    (e) =>
+      new Error(
+        `Failed to fetch cards.csv: ${e instanceof Error ? e.message : String(e)}`,
+      ),
+  );
 
-    const parseResult = parseCsvData(csvText);
-
-    if (parseResult.isErr()) {
-      // パースエラーの場合、早期リターン
-      errorMessage.value = `カードデータのパース中にエラーが発生しました: ${parseResult.error.message}`;
-      return;
+  if (responseResult.isErr()) {
+    // AbortErrorの場合はエラーとして扱わない
+    if (
+      responseResult.error instanceof DOMException &&
+      responseResult.error.name === "AbortError"
+    ) {
+      return err(new Error("Aborted")); // 特別なエラーを返して後で無視する
     }
-
-    cards.value = parseResult.value;
-  } catch (error) {
-    // アンマウント中に中断した場合は何もしない
-    if (error instanceof DOMException && error.name === "AbortError") {
-      return;
-    }
-    // 予期せぬネットワークエラーなど
-    errorMessage.value = `カードデータの取得中に予期せぬエラーが発生しました: ${
-      error instanceof Error ? error.message : String(error)
-    }`;
+    return err(responseResult.error);
   }
+  const response = responseResult.value;
+
+  if (!response.ok) {
+    return err(
+      new Error(
+        `カードデータの読み込みに失敗しました: HTTPステータス ${response.status}`,
+      ),
+    );
+  }
+
+  const csvText = await response.text();
+  const parseResult = parseCsvData<Card>(csvText);
+
+  if (parseResult.isErr()) {
+    return err(
+      new Error(
+        `カードデータのパース中にエラーが発生しました: ${parseResult.error.message}`,
+      ),
+    );
+  }
+
+  return parseResult;
 };
 
-onMounted(fetchAndParseCsv);
+onMounted(async () => {
+  errorMessage.value = null; // 直前のエラーをクリア
+  const result = await loadCardsData(abortController.signal);
+
+  if (result.isOk()) {
+    cards.value = result.value;
+  } else {
+    // AbortErrorの場合はエラーメッセージを表示しない
+    if (result.error.message === "Aborted") {
+      return;
+    }
+    errorMessage.value = result.error.message;
+  }
+});
+
 onBeforeUnmount(() => abortController.abort());
 
 const onImageError = (event: Event) => {
   const target = event.target as HTMLImageElement;
   target.src = getPlaceholderImagePath();
-  target.onerror = null; // 無限ループを防ぐため、これ以上エラーを発生させない
+  target.onerror = null;
 };
 
 const openModal = (card: Card) => {
-  // トリガー要素を保存しておき、クローズ時にフォーカスを戻す
   lastFocusedEl.value =
     document.activeElement instanceof HTMLElement
       ? document.activeElement
@@ -116,7 +147,6 @@ const openModal = (card: Card) => {
 const closeModal = () => {
   showModal.value = false;
   selectedCard.value = null;
-  // 次のフレームで元の要素にフォーカスを戻す
   nextTick(() => {
     lastFocusedEl.value?.focus();
   });
