@@ -2,12 +2,10 @@
 import { ref, onMounted } from "vue";
 import { parseCsvData } from "../utils/csvParser";
 import { Judgment } from "../types/judgment";
+import type { Card } from "../types/card";
+import { useData } from 'vitepress'
 
-interface CardMap {
-  id: string;
-  name: string;
-}
-
+const { site } = useData()
 const judgments = ref<Judgment[]>([]);
 const error = ref<string | null>(null);
 const cardIdToNameMap = ref<Map<string, string>>(new Map());
@@ -15,14 +13,14 @@ const cardIdToNameMap = ref<Map<string, string>>(new Map());
 onMounted(async () => {
   try {
     // カード情報を読み込み、マッピングを作成
-    const cardResponse = await fetch("/kcg-wiki/cards.csv");
+    const cardResponse = await fetch(`${site.value.base}cards.csv`);
     if (!cardResponse.ok) {
       throw new Error(
         `HTTP error! status: ${cardResponse.status} for cards.csv`,
       );
     }
     const cardCsvText = await cardResponse.text();
-    const cardResult = parseCsvData<CardMap>(cardCsvText); // CardMapとしてパース
+    const cardResult = parseCsvData<Card>(cardCsvText);
 
     if (cardResult.isOk()) {
       cardResult.value.forEach((card) => {
@@ -33,7 +31,7 @@ onMounted(async () => {
     }
 
     // 裁定情報を読み込み、パース
-    const judgmentResponse = await fetch("/kcg-wiki/judgment.csv");
+    const judgmentResponse = await fetch(`${site.value.base}judgment.csv`);
     if (!judgmentResponse.ok) {
       throw new Error(
         `HTTP error! status: ${judgmentResponse.status} for judgment.csv`,
